@@ -113,7 +113,7 @@ console.log(findPathDistance(solutionPath));
 
 function findShortestPath(possiblePaths) {
 	var bestPath;
-	var dist = 99999999;
+	var dist = Infinity;
 	for (let i = 0; i < possiblePaths.length; i++) {
 		if (dist > findPathDistance(possiblePaths[i])) {
 			dist = findPathDistance(possiblePaths[i]);
