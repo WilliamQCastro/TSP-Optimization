@@ -5,21 +5,18 @@ class City {
 		this.x = X;
 		this.y = Y;
 		this.radius = 5;
+		this.distFromCOM = Infinity;
 	}
 
-	getName(){ return this.cityName; }
+	getName(){ return this.name; }
 	getX(){ return this.x; }
 	getY(){ return this.y; }
 
 	setName(cityName){ this.name = cityName; }
 	setX(x_pos){ this.x = x_pos; }
 	setY(y_pos){ this.y = y_pos; }
-
-	drawCity(){
-		ctx.strokeStyle = 'white';
-		ctx.beginPath();
-		ctx.arc(this.x, this.y, this.radius, 0, 2*Math.PI);
-		ctx.stroke();
+	setDistFromCOM(distance){ this.distFromCOM = distance; }
+	drawCityName(){
 		ctx.font = '20px Arial';
 		ctx.fillStyle = 'white';
 		let x_offset = 20;
@@ -40,76 +37,113 @@ const ctx =  canvas.getContext('2d');
 canvas.width = 800;
 canvas.height = 500;
 ctx.strokeStyle = 'white';
-let windowFrame = 0;
-
 
 //	Random city generation
-numCities = 9; 	// MUST BE <= 26
+numCities = 7; 	// MUST BE <= 26
 RADIUS = 5;
-var coolCityNames = new Array('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T','U', 'V', 'W', 'X', 'Y', 'Z');
+var cityNames = new Array('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T','U', 'V', 'W', 'X', 'Y', 'Z');
 var region = new Array();
 var xCoords = new Array();
 var yCoords = new Array();
 
 for (var i = 0; i < numCities; i++){
-	var temp = new City(coolCityNames[i], getRandomInt(0, canvas.width), getRandomInt(0, canvas.height));
+	var temp = new City(cityNames[i], getRandomInt(0, canvas.width), getRandomInt(0, canvas.height));
 	xCoords.push(temp.getX());
 	yCoords.push(temp.getY());
 	region.push(temp);
 }
 
-//	Making array of distances between cities
-var distances = new Array();
-// This loop inserts dummy values to create a full n-by-n matrix
+
+// Draws Cities
 for (var i = 0; i < region.length; i++) {
-	distances.push(xCoords.slice());
-}
-// These nested loops populate the n-by-n matrix with accurate distance data
-for (var i = 0; i < region.length; i++) {
-	for (var j = 0; j < region.length; j++) {
-		distances[i][j] = calculateDistance(region[i].getX(), region[i].getY(), region[j].getX(), region[j].getY());
-	}
+	drawFilledCircle(region[i].getX(), region[i].getY(), RADIUS, 'white');
+	console.log("tick");
 }
 
-//	Draw Cities on Canvas
-for (var i = 0; i < numCities; i++){
-	region[i].drawCity();
-}
-//		Slow rendering to view progress
-//	Algorithm play: Brute Force vs. My Optimizations
 //		(1) Brute force - test all possible paths for optimal solution
-//		(2) My Approach
-//			(a) Center of Mass
-var x_COM = getArrayAvg(xCoords);
-var y_COM = getArrayAvg(yCoords);
-drawFilledCircle(x_COM, y_COM, RADIUS, 'blue');
-
-//			(b) Bounding Box Center
-var minX = findArrayMin(xCoords);
-var minY = findArrayMin(yCoords);
-var maxX = findArrayMax(xCoords);
-var maxY =findArrayMax(yCoords);
-
-drawFilledCircle(Math.floor((minX + maxX)/2), Math.floor((minY + maxY)/2), RADIUS, 'orange');
-
-drawLine(minX, minY, minX, maxY, 'orange', 1);
-drawLine(minX, maxY, maxX, maxY, 'orange', 1);
-drawLine(maxX, maxY, maxX, minY, 'orange', 1);
-drawLine(maxX, minY, minX, minY, 'orange', 1);
-
-//			(c) Sticky Ping from Center of Mass
-//			(c.1) Nearest Neighbor w/ Bounding box considerations
-//			(d) Enclosing Circle on Center of Mass
-//			(e) Clustering (a/b)?
-
 const allPaths = generatePermutations(region);
 const solutionPath = findShortestPath(allPaths);
-connectCities(solutionPath);
-console.log("--------------------------------");
 console.log(solutionPath);
 console.log(findPathDistance(solutionPath));
+console.log("Solution Space = ", allPaths.length);
+
+// Draws Solution
+solutionPath.push(solutionPath[0]);
+for (var i = 0; i < solutionPath.length-1; i++) {
+	drawLine(solutionPath[i].x, solutionPath[i].y, solutionPath[i+1].x, solutionPath[i+1].y, 'yellow', 2);
+}
+solutionPath.pop();
+
+//		(2) My Approach - Center of Mass Convergence
+var x_avg = getArrayAvg(xCoords);
+var y_avg = getArrayAvg(yCoords);
+drawFilledCircle(x_avg, y_avg, RADIUS, 'blue');
+
+// Update distances from Center of Mass point within each City
+for (var i = 0; i < region.length; i++) {
+	region[i].setDistFromCOM(calculateDistance(region[i].getX(), region[i].getY(), x_avg, y_avg));
+}
+region.sort((a,b) => b.distFromCOM - a.distFromCOM);
 
 
+// Dot Product: ((point.x - line.x1) * (line.x2 - line.x1) + (point.y - line.y1) * (line.y2 - line.y1)) / line_length
+
+// !! MUST PUT A CHECK TO ENSURE numCities ISN'T LESS THAN 3
+var myPath = region.splice(0, 3);
+myPath.push(myPath[0]);
+console.log(myPath.length, myPath);
+var insertCityHere;
+for (var i = 0; i < region.length; i++) {
+	var smallest_P2L_dist = Infinity;
+	console.log("Checking: ", region[i]);
+	for (var j = 0; j < myPath.length - 1; j++){
+		let temp_P2L_dist = distanceClosestLine(region[i].getX(), region[i].getY(), myPath[j].getX(), myPath[j].getY(), myPath[j+1].getX(), myPath[j+1].getY());
+		//console.log("Checking City ", region[i], " within: ", myPath);
+		if (temp_P2L_dist < smallest_P2L_dist) {
+			console.log(temp_P2L_dist, " < ", smallest_P2L_dist, " for Cities: ", myPath[j].getName(), " & ", myPath[j+1].getName());
+			insertCityHere = j+1;
+			smallest_P2L_dist = temp_P2L_dist;
+		}
+	}
+	console.log("Insert: ", region[i], "between ", myPath[insertCityHere-1], myPath[insertCityHere]);
+	myPath.splice(insertCityHere, 0, region[i]);
+}
+console.log(myPath);
+
+for (var i = 0; i < myPath.length-1; i++) {
+	drawLine(myPath[i].x, myPath[i].y, myPath[i+1].x, myPath[i+1].y, 'red', 2);
+	myPath[i].drawCityName();
+}
+console.log("My Path's Distance: ", findPathDistance(myPath));
+
+
+
+function distanceClosestLine(x_point, y_point, x1_line, y1_line, x2_line, y2_line){
+	var dist_point2Line1 = calculateDistance(x_point, y_point, x1_line, y1_line);
+	var dist_point2Line2 = calculateDistance(x_point, y_point, x2_line, y2_line);
+	var line_length = Math.sqrt(dx_line*dx_line + dy_line*dy_line);
+	var dx_line = x2_line - x1_line;
+	var dy_line = y2_line - y1_line;
+	var dotProduct = ((x_point - x1_line) * (dx_line) + (y_point - y1_line) * (dy_line)) / (line_length*line_length);
+	if(dotProduct < 0) { // Point(x,y) lies beyond City(x1,y1) on the imaginary extention line
+		console.log("Imaginary - A");
+		return dist_point2Line2;
+	}
+	else if(dotProduct > (line_length*line_length)){ // Point(x,y) lies beyond City(x2, y2) on the imaginary extention line
+		console.log("Imaginary - B");
+		return dist_point2Line1;
+	}
+	else {
+		return Math.floor(Math.abs((x1_line - x_point) * (y2_line - y_point) - (x2_line - x_point) * (y1_line - y_point)) / line_length);
+
+		// var closest_x_line = x1_line + (dotProduct * (x2_line - x1_line) / (line_length*line_length));
+		// var closest_y_line = y1_line + (dotProduct * (y2_line - y1_line) / (line_length*line_length));
+		// drawFilledCircle(closest_x_line, closest_y_line, 3, 'orange');
+		// drawLine(closest_x_line, closest_y_line, x_point, y_point, 'orange', 1);
+		// return calculateDistance(x_point, y_point, closest_x_line, closest_y_line);
+	}
+	
+}
 
 function findShortestPath(possiblePaths) {
 	var bestPath;
@@ -117,7 +151,7 @@ function findShortestPath(possiblePaths) {
 	for (let i = 0; i < possiblePaths.length; i++) {
 		if (dist > findPathDistance(possiblePaths[i])) {
 			dist = findPathDistance(possiblePaths[i]);
-			bestPath = possiblePaths[i]; 
+			bestPath = possiblePaths[i];
 		}
 	}
 	return bestPath;
@@ -154,23 +188,6 @@ function generatePermutations(arr) {
 	return permutation;
 }
 
-function bruteForceFind(cityList) {
-	var bestPathLength = 99999999;
-	var bestPathList = cityList.splice();
-	var temp;
-	for (i = 0; i < cityList.length; i++) {
-		if (cityList.length == 2) {
-			returncalculateDistance(cityList.getX(), cityList.getX(), cityList.getX(), cityList.getX()) 
-		}
-		else {
-
-			bruteForceFind(bestPathList.splice(1));
-		}
-	}
-	console.log(bestPathLength);
-	return bestPathList;
-}
-
 function connectCities(pathArray) {
 	for (var i = 0; i < pathArray.length; i++){
 		if (i == pathArray.length - 1){
@@ -188,8 +205,6 @@ function displayText() {
 }
 
 function drawLine(x1, y1, x2, y2, color, width) {
-	drawFilledCircle(x1, y1, 3, 'purple');
-	drawFilledCircle(x2, y2, 3, 'purple');
 	ctx.strokeStyle = color;
 	ctx.lineWidth = width;
 	ctx.beginPath();
